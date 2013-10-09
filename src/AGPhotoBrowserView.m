@@ -87,6 +87,7 @@ const int AGPhotoBrowserThresholdToCenter = 150;
 		cell.selectionStyle = UITableViewCellSelectionStyleNone;
     }
     
+    cell.imageView.image = nil;
     [self configureCell:cell forRowAtIndexPath:indexPath];
     
     return cell;
@@ -95,6 +96,7 @@ const int AGPhotoBrowserThresholdToCenter = 150;
 - (void)configureCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath
 {
     UIImageView *imageView = (UIImageView *)[cell.contentView viewWithTag:1];
+    [imageView setImage:nil];
 	if (!imageView) {
 		imageView = [[UIImageView alloc] initWithFrame:self.bounds];
 		imageView.userInteractionEnabled = YES;
@@ -117,7 +119,29 @@ const int AGPhotoBrowserThresholdToCenter = 150;
 		[cell.contentView addSubview:imageView];
 	}
 	
-    imageView.image = [_dataSource photoBrowser:self imageAtIndex:indexPath.row];
+    // First, check to see if we can request an image directly form the data source...
+    if ([self.dataSource respondsToSelector:@selector(photoBrowser:imageAtIndex:)]) {
+        UIImage *image = [_dataSource photoBrowser:self imageAtIndex:indexPath.row];
+        if (image) {
+            imageView.image = image;
+        }
+        
+    }
+    
+    // If we can't, try to pull the image from a URL...
+    if (!imageView.image &&
+        [self.dataSource respondsToSelector:@selector(photoBrowser:imageURLAtIndex:)]) {
+        NSURL *imageURL = [self.dataSource photoBrowser:self imageURLAtIndex:indexPath.row];
+        if (imageURL) {
+            NSURLRequest *urlRequest = [[NSURLRequest alloc] initWithURL:imageURL
+                                                             cachePolicy:NSURLCacheStorageAllowed timeoutInterval:30.0];
+            [NSURLConnection sendAsynchronousRequest:urlRequest
+                                               queue:[NSOperationQueue mainQueue]
+                                   completionHandler:^(NSURLResponse *response, NSData *data, NSError *connectionError) {
+                                       imageView.image = [UIImage imageWithData:data];
+                                   }];
+        }
+    }
 }
 
 
